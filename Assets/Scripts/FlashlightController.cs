@@ -10,8 +10,11 @@ public class FlashlightController : MonoBehaviour
     [Tooltip("Referencia al inventario del jugador.")]
     public Inventory inventory;
     
-    [Tooltip("El objeto de luz de la linterna (hijo del jugador o cámara) que se activará.")]
+    [Tooltip("El objeto de luz de la linterna (hijo del jugador o cámara) que se activará/apagará con la tecla F.")]
     public GameObject flashlightObject;
+
+    [Tooltip("El objeto visual 3D (modelo/malla) de la linterna acoplado al personaje. Se mostrará siempre que tenga el objeto en el inventario.")]
+    public GameObject flashlightModelObject;
 
     [Header("Settings")]
     [Tooltip("El ID del objeto en el inventario que activa la linterna.")]
@@ -33,6 +36,12 @@ public class FlashlightController : MonoBehaviour
         {
             flashlightObject.SetActive(false);
         }
+
+        // Asegurar que el modelo 3D inicie oculto si no se tiene en el inventario
+        if (flashlightModelObject != null)
+        {
+            flashlightModelObject.SetActive(false);
+        }
     }
 
     void Update()
@@ -46,6 +55,12 @@ public class FlashlightController : MonoBehaviour
         if (checkInventory != hasFlashlight)
         {
             hasFlashlight = checkInventory;
+
+            // Activar/desactivar la visualización del modelo 3D según si tiene el objeto
+            if (flashlightModelObject != null)
+            {
+                flashlightModelObject.SetActive(hasFlashlight);
+            }
 
             // Si nos quitan la linterna del inventario, la apagamos automáticamente
             if (!hasFlashlight && flashlightObject != null)
