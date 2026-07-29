@@ -22,6 +22,16 @@ public class ThirdPersonCamera : MonoBehaviour
     [Tooltip("Límite superior para mirar hacia arriba.")]
     public float maxY = 60f;
 
+    [Header("Collision Settings")]
+    [Tooltip("Activa o desactiva la colisión de la cámara con el entorno.")]
+    public bool enableCollision = true;
+    [Tooltip("Qué capas físicas bloquearán la cámara (usualmente todo excepto el Jugador y Triggers).")]
+    public LayerMask collisionLayers = ~0; // Por defecto colisiona con TODO
+    [Tooltip("El radio de la esfera de colisión de la cámara para detectar paredes.")]
+    public float cameraRadius = 0.2f;
+    [Tooltip("Distancia mínima permitida al jugador en caso de colisión estrecha.")]
+    public float minDistance = 0.5f;
+
     private float currentX = 0f;
     private float currentY = 0f;
 
@@ -49,11 +59,37 @@ public class ThirdPersonCamera : MonoBehaviour
         // Limitar la rotación vertical para evitar que la cámara dé la vuelta completa
         currentY = Mathf.Clamp(currentY, minY, maxY);
 
-        // Calcular la rotación y la posición objetivo de la cámara
+        // Calcular la rotación y la posición objetivo base de la cámara (sin colisión)
         Quaternion rotation = Quaternion.Euler(currentY, currentX, 0);
-        Vector3 targetPosition = target.position + rotation * offset;
+        Vector3 defaultPosition = target.position + rotation * offset;
+        Vector3 targetPosition = defaultPosition;
 
-        // Interpolar suavemente entre la posición actual y la objetivo
+        // Lógica de colisión de la cámara
+        if (enableCollision)
+        {
+            // El origen es la cabeza/pecho aproximado del jugador
+            Vector3 raycastOrigin = target.position + Vector3.up * (offset.y * 0.75f);
+            Vector3 raycastDirection = (defaultPosition - raycastOrigin).normalized;
+
+            // Comenzar el cast un poco alejado del centro del jugador para evitar colisionar con su propio cuerpo
+            float startOffset = 0.6f;
+            Vector3 startPoint = raycastOrigin + raycastDirection * startOffset;
+            float maxDistance = Vector3.Distance(startPoint, defaultPosition);
+
+            if (maxDistance > 0)
+            {
+                RaycastHit hit;
+                // Usamos SphereCast para tener una colisión más realista y evitar atravesar esquinas
+                if (Physics.SphereCast(startPoint, cameraRadius, raycastDirection, out hit, maxDistance, collisionLayers, QueryTriggerInteraction.Ignore))
+                {
+                    // Restamos un pequeño margen de 0.1f al punto de impacto para que la cámara no se pegue a la pared
+                    float newDistance = Mathf.Max(hit.distance + startOffset - 0.1f, minDistance);
+                    targetPosition = raycastOrigin + raycastDirection * newDistance;
+                }
+            }
+        }
+
+        // Interpolar suavemente entre la posición actual y la objetivo calculada
         transform.position = Vector3.Lerp(transform.position, targetPosition, smoothSpeed);
 
         // Hacer que la cámara mire hacia el jugador (un poco por encima de su base)

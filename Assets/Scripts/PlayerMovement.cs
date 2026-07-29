@@ -14,20 +14,39 @@ public class PlayerMovement : MonoBehaviour
     public Transform cameraTransform;
 
     [Header("Movement Settings")]
-    [Tooltip("Velocidad de movimiento del jugador.")]
+    [Tooltip("Velocidad de caminata del jugador.")]
     public float speed = 6f;
+    [Tooltip("Velocidad al correr (sprint) presionando Shift.")]
+    public float sprintSpeed = 10f;
     [Tooltip("Fuerza de gravedad aplicada al jugador.")]
     public float gravity = -9.81f;
     [Tooltip("Altura máxima del salto.")]
     public float jumpHeight = 1.5f;
+
+    [Header("Sprint Settings")]
+    [Tooltip("Tiempo máximo continuo (en segundos) que el jugador puede correr.")]
+    public float maxSprintTime = 5f;
+    [Tooltip("Tiempo de recuperación (en segundos) para recargar el sprint de 0 a su capacidad máxima.")]
+    public float sprintCooldownTime = 3f;
     
     [Header("Rotation Settings")]
     [Tooltip("Tiempo de suavizado para la rotación del personaje.")]
     public float turnSmoothTime = 0.1f;
     private float turnSmoothVelocity;
 
+    [Header("Camera Alignment Settings")]
+    [Tooltip("Si está activo, el personaje siempre rotará para mirar hacia donde apunta la cámara (eje Y).")]
+    public bool alwaysFaceCamera = false;
+
     private Vector3 velocity;
     private bool isGrounded;
+    private float currentSprintTime;
+    private float currentSpeed;
+    private bool isSprinting;
+
+    // Propiedades públicas para consultar el estado del sprint desde otros scripts (ej: UI de estamina)
+    public float SprintStaminaPercent => maxSprintTime > 0 ? Mathf.Clamp01(currentSprintTime / maxSprintTime) : 0f;
+    public bool IsSprinting => isSprinting;
 
     void Start()
     {
@@ -42,6 +61,10 @@ public class PlayerMovement : MonoBehaviour
         {
             cameraTransform = Camera.main.transform;
         }
+
+        // Inicializar velocidades y tiempo de sprint
+        currentSprintTime = maxSprintTime;
+        currentSpeed = speed;
     }
 
     void Update()
@@ -57,19 +80,59 @@ public class PlayerMovement : MonoBehaviour
         Vector2 input = GetMovementInput();
         Vector3 direction = new Vector3(input.x, 0f, input.y).normalized;
 
-        // Si hay movimiento
-        if (direction.magnitude >= 0.1f)
+        // Lógica de sprint (correr)
+        bool sprintInput = GetSprintHeld();
+        bool isMoving = direction.magnitude >= 0.1f;
+
+        if (sprintInput && isMoving && currentSprintTime > 0f)
         {
-            // Calcular el ángulo de rotación objetivo relativo a la rotación de la cámara
-            float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg + cameraTransform.eulerAngles.y;
+            isSprinting = true;
+            currentSpeed = sprintSpeed;
             
-            // Suavizar la rotación del jugador
+            // Consumir estamina
+            currentSprintTime -= Time.deltaTime;
+            if (currentSprintTime < 0f) currentSprintTime = 0f;
+        }
+        else
+        {
+            isSprinting = false;
+            currentSpeed = speed;
+
+            // Regenerar estamina si no estamos corriendo
+            if (currentSprintTime < maxSprintTime)
+            {
+                currentSprintTime += Time.deltaTime * (maxSprintTime / sprintCooldownTime);
+                if (currentSprintTime > maxSprintTime) currentSprintTime = maxSprintTime;
+            }
+        }
+
+        // Lógica de rotación y movimiento basada en la alineación de cámara
+        if (alwaysFaceCamera)
+        {
+            // El jugador siempre rota para alinearse con la cámara horizontalmente
+            float targetAngle = cameraTransform.eulerAngles.y;
             float angle = Mathf.SmoothDampAngle(transform.eulerAngles.y, targetAngle, ref turnSmoothVelocity, turnSmoothTime);
             transform.rotation = Quaternion.Euler(0f, angle, 0f);
 
-            // Calcular la dirección final del movimiento
-            Vector3 moveDir = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
-            controller.Move(moveDir.normalized * speed * Time.deltaTime);
+            // Mover en relación a la propia orientación local del jugador (strafe)
+            if (isMoving)
+            {
+                Vector3 moveDir = transform.right * input.x + transform.forward * input.y;
+                controller.Move(moveDir.normalized * currentSpeed * Time.deltaTime);
+            }
+        }
+        else
+        {
+            // El jugador gira hacia la dirección en la que camina
+            if (isMoving)
+            {
+                float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg + cameraTransform.eulerAngles.y;
+                float angle = Mathf.SmoothDampAngle(transform.eulerAngles.y, targetAngle, ref turnSmoothVelocity, turnSmoothTime);
+                transform.rotation = Quaternion.Euler(0f, angle, 0f);
+
+                Vector3 moveDir = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
+                controller.Move(moveDir.normalized * currentSpeed * Time.deltaTime);
+            }
         }
 
         // Salto
@@ -107,6 +170,15 @@ public class PlayerMovement : MonoBehaviour
         return Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
 #else
         return Input.GetButtonDown("Jump");
+#endif
+    }
+
+    private bool GetSprintHeld()
+    {
+#if ENABLE_INPUT_SYSTEM
+        return Keyboard.current != null && (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed);
+#else
+        return Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 #endif
     }
 }

@@ -4,6 +4,9 @@ using UnityEngine.Events;
 public class InteractionZone : Interactable
 {
     [Header("Requirement Settings")]
+    [Tooltip("Si es verdadero, se requiere que el jugador tenga el objeto especificado para interactuar.")]
+    public bool requiresItem = true;
+
     [Tooltip("El ID del objeto que se necesita para activar esta zona. Ej: 'Llave'")]
     public string requiredItemId = "Llave";
     
@@ -18,10 +21,10 @@ public class InteractionZone : Interactable
     public string missingItemMessage = "Está cerrado. Necesitas una Llave.";
 
     [Header("Events")]
-    [Tooltip("Eventos que ocurrirán cuando el jugador tenga el objeto correcto.")]
+    [Tooltip("Eventos que ocurrirán cuando la interacción sea exitosa.")]
     public UnityEvent onInteractSuccess;
 
-    [Tooltip("Eventos opcionales si el jugador intenta interactuar sin el objeto.")]
+    [Tooltip("Eventos opcionales si el jugador intenta interactuar sin el objeto requerido.")]
     public UnityEvent onInteractFail;
 
     private bool isUnlocked = false;
@@ -34,41 +37,45 @@ public class InteractionZone : Interactable
         Inventory inventory = player.GetComponent<Inventory>();
         PlayerInteraction playerInteraction = player.GetComponent<PlayerInteraction>();
 
-        if (inventory != null)
+        bool canInteract = !requiresItem;
+
+        if (requiresItem && inventory != null)
         {
-            if (inventory.HasItem(requiredItemId))
+            canInteract = inventory.HasItem(requiredItemId);
+        }
+
+        if (canInteract)
+        {
+            isUnlocked = true;
+            Debug.Log($"[Zona] Éxito: {successMessage}");
+
+            // Remover el objeto si requería llave y está marcado para consumirse
+            if (requiresItem && consumeItem && inventory != null)
             {
-                isUnlocked = true;
-                Debug.Log($"[Zona] Éxito: {successMessage}");
-
-                // Remover el objeto si está marcado
-                if (consumeItem)
-                {
-                    inventory.RemoveItem(requiredItemId);
-                }
-
-                // Mostrar mensaje de éxito en pantalla
-                if (playerInteraction != null)
-                {
-                    playerInteraction.ShowFeedback(successMessage, 3.0f);
-                }
-
-                // Lanzar los eventos de éxito
-                onInteractSuccess.Invoke();
+                inventory.RemoveItem(requiredItemId);
             }
-            else
+
+            // Mostrar mensaje de éxito en pantalla
+            if (playerInteraction != null)
             {
-                Debug.Log($"[Zona] Bloqueado: {missingItemMessage}");
-
-                // Mostrar mensaje de error en pantalla
-                if (playerInteraction != null)
-                {
-                    playerInteraction.ShowFeedback(missingItemMessage, 3.0f);
-                }
-
-                // Lanzar los eventos de fallo
-                onInteractFail.Invoke();
+                playerInteraction.ShowFeedback(successMessage, 3.0f);
             }
+
+            // Lanzar los eventos de éxito
+            onInteractSuccess.Invoke();
+        }
+        else
+        {
+            Debug.Log($"[Zona] Bloqueado: {missingItemMessage}");
+
+            // Mostrar mensaje de error en pantalla
+            if (playerInteraction != null)
+            {
+                playerInteraction.ShowFeedback(missingItemMessage, 3.0f);
+            }
+
+            // Lanzar los eventos de fallo
+            onInteractFail.Invoke();
         }
     }
 }
