@@ -38,6 +38,14 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("Si está activo, el personaje siempre rotará para mirar hacia donde apunta la cámara (eje Y).")]
     public bool alwaysFaceCamera = false;
 
+    [Header("Animation Settings")]
+    [Tooltip("El componente Animator para controlar las animaciones del jugador (se auto-detectará si se deja vacío).")]
+    public Animator animator;
+    [Tooltip("Nombre del parámetro booleano del Animator que controla la caminata.")]
+    public string isWalkingParam = "isWalking";
+    [Tooltip("Si es verdadero, la velocidad de la animación se multiplicará dinámicamente cuando el jugador esté corriendo.")]
+    public bool adjustAnimationSpeed = true;
+
     private Vector3 velocity;
     private bool isGrounded;
     private float currentSprintTime;
@@ -60,6 +68,12 @@ public class PlayerMovement : MonoBehaviour
         if (cameraTransform == null && Camera.main != null)
         {
             cameraTransform = Camera.main.transform;
+        }
+
+        // Auto-detectar Animator en el objeto actual o en los hijos
+        if (animator == null)
+        {
+            animator = GetComponentInChildren<Animator>();
         }
 
         // Inicializar velocidades y tiempo de sprint
@@ -132,6 +146,25 @@ public class PlayerMovement : MonoBehaviour
 
                 Vector3 moveDir = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
                 controller.Move(moveDir.normalized * currentSpeed * Time.deltaTime);
+            }
+        }
+
+        // Actualizar parámetros del Animator
+        if (animator != null)
+        {
+            animator.SetBool(isWalkingParam, isMoving);
+
+            if (adjustAnimationSpeed)
+            {
+                if (isMoving)
+                {
+                    // Si el jugador corre, acelera proporcionalmente la animación de caminata
+                    animator.speed = isSprinting ? (sprintSpeed / speed) : 1f;
+                }
+                else
+                {
+                    animator.speed = 1f;
+                }
             }
         }
 
